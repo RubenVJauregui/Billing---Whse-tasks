@@ -1,0 +1,12 @@
+node_modules
+.next
+.git
+.env
+.env.*
+!.env.example
+*.log
+*.tsbuildinfo
+tests
+AGENTS.md
+CLAUDE.md
+README.md
