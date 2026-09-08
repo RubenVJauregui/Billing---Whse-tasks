@@ -42,6 +42,9 @@ type RawFacility = {
 type RawTask = Record<string, unknown>;
 type TaskSearchData = Record<string, unknown>;
 
+const FALLBACK_FACILITY_ID = "LT_F1";
+const FALLBACK_TIME_ZONE = "America/Los_Angeles";
+
 export class WmsError extends Error {
   constructor(
     message: string,
@@ -60,19 +63,11 @@ function requiredBaseUrl() {
 }
 
 function defaultFacilityId() {
-  const facilityId = process.env.DEFAULT_WMS_FACILITY_ID;
-  if (!facilityId) {
-    throw new WmsError("The default warehouse is not configured for this site.", 503);
-  }
-  return facilityId;
+  return process.env.DEFAULT_WMS_FACILITY_ID?.trim() || FALLBACK_FACILITY_ID;
 }
 
 function defaultTimeZone() {
-  const timeZone = process.env.DEFAULT_WMS_TIMEZONE;
-  if (!timeZone) {
-    throw new WmsError("The default warehouse timezone is not configured for this site.", 503);
-  }
-  return timeZone;
+  return process.env.DEFAULT_WMS_TIMEZONE?.trim() || FALLBACK_TIME_ZONE;
 }
 
 async function requestWithSession<T>(
@@ -149,7 +144,9 @@ export async function loadFacilities(session: AuthSession): Promise<Facility[]> 
 
 export function selectInitialFacility(facilities: Facility[]) {
   const preferredId = defaultFacilityId();
-  return facilities.find((facility) => facility.id === preferredId) ?? facilities[0];
+  return facilities.find(
+    (facility) => facility.id === preferredId || facility.code === preferredId,
+  ) ?? facilities[0];
 }
 
 function localDate(timeZone: string) {

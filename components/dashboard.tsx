@@ -589,7 +589,7 @@ export default function Dashboard() {
           <button
             className="refresh-button"
             onClick={() => loadTasks(facility, selectionForPeriod(period))}
-            disabled={loadingTasks || loadingFacilities}
+            disabled={loadingTasks || loadingFacilities || !facility.id}
           >
             <span>{loadingTasks ? "Refreshing" : "Refresh"}</span>
           </button>
@@ -653,7 +653,13 @@ export default function Dashboard() {
             <div className="state-panel error-state" role="alert">
               <CircleAlert size={26} />
               <div><strong>Assigned tasks are unavailable</strong><span>{error}</span></div>
-              <button onClick={() => loadTasks(facility, selectionForPeriod(period))}>Try again</button>
+              <button
+                onClick={() => facility.id
+                  ? loadTasks(facility, selectionForPeriod(period))
+                  : loadWorkspace()}
+              >
+                Try again
+              </button>
             </div>
           ) : loadingTasks ? (
             <div className="loading-table" aria-label="Loading assigned tasks">

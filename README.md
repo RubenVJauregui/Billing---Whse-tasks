@@ -12,8 +12,8 @@ For local development, copy `.env.example` to `.env.local`. For Ibis, configure 
 | `NEXT_PUBLIC_BASE_URL` | Compatibility only | No | Existing ItemGPT BFF origin; used only when `ITEMGPT_BASE_URL` is absent. |
 | `WMS_API_BASE_URL` | Yes | No | WMS API origin used after sign-in. |
 | `DEFAULT_WMS_TENANT_ID` | No | No | Login tenant; defaults to `LT`. |
-| `DEFAULT_WMS_FACILITY_ID` | Yes | No | Initial facility hint used while loading accessible facilities. |
-| `DEFAULT_WMS_TIMEZONE` | Yes | No | Timezone fallback used while loading facility metadata. |
+| `DEFAULT_WMS_FACILITY_ID` | No | No | Initial facility hint; defaults to Valley View (`LT_F1`) and falls back to the first accessible facility. |
+| `DEFAULT_WMS_TIMEZONE` | No | No | Initial timezone hint; defaults to `America/Los_Angeles` until facility metadata is loaded. |
 
 Production must provide `ITEMGPT_BASE_URL`, unless the deployment already provides the ItemGPT BFF origin as `NEXT_PUBLIC_BASE_URL`. If both are present, `ITEMGPT_BASE_URL` takes precedence.
 
