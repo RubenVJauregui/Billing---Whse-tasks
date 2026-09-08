@@ -582,7 +582,7 @@ export default function Dashboard() {
       <div className="dashboard-content">
         <section className="page-heading">
           <div>
-            <span className="eyebrow">Daily operations</span>
+            <span className="eyebrow">Warehouse Operations</span>
             <h1>Assigned Tasks</h1>
             <p>{periodLabel(period)} · {facility.name} local time</p>
           </div>
