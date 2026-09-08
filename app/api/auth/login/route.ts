@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { AuthError, storeOAuthTokens, type OAuthResponse } from "@/lib/session";
+import {
+  AuthError,
+  getItemGptBaseUrl,
+  storeOAuthTokens,
+  type OAuthResponse,
+} from "@/lib/session";
 
 export async function POST(request: Request) {
   try {
@@ -17,20 +22,14 @@ export async function POST(request: Request) {
       );
     }
 
-    const baseUrl = process.env.ITEMGPT_BASE_URL?.replace(/\/$/, "");
+    const baseUrl = getItemGptBaseUrl();
     if (!baseUrl) {
       return NextResponse.json(
         { message: "Sign-in is not configured for this site." },
         { status: 503 },
       );
     }
-    const defaultTenantId = process.env.DEFAULT_WMS_TENANT_ID;
-    if (!defaultTenantId) {
-      return NextResponse.json(
-        { message: "Sign-in is not configured for this site." },
-        { status: 503 },
-      );
-    }
+    const defaultTenantId = process.env.DEFAULT_WMS_TENANT_ID?.trim() || "LT";
 
     const response = await fetch(`${baseUrl}/api/auth/password-grant`, {
       method: "POST",

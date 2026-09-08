@@ -43,6 +43,12 @@ export class AuthError extends Error {
   }
 }
 
+export function getItemGptBaseUrl() {
+  return (process.env.ITEMGPT_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL)
+    ?.trim()
+    .replace(/\/$/, "");
+}
+
 function decodePayload(token: string): JwtPayload {
   const payload = token.split(".")[1];
   if (!payload) throw new AuthError("Your session could not be verified.");
@@ -112,7 +118,7 @@ export async function clearSession() {
 }
 
 async function refreshSession(refreshToken: string) {
-  const baseUrl = process.env.ITEMGPT_BASE_URL?.replace(/\/$/, "");
+  const baseUrl = getItemGptBaseUrl();
   if (!baseUrl) throw new AuthError("Sign-in service is not configured.", 503);
 
   const response = await fetch(`${baseUrl}/api/auth/refresh`, {
