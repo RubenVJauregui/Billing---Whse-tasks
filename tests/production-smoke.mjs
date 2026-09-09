@@ -119,6 +119,44 @@ try {
   assert.equal(await page.locator('.view-tabs button[aria-pressed="true"]').count(), 1);
   console.log("ok all column navigation views by keyboard");
 
+  const firstTaskRow = page.locator(".task-data-row").first();
+  const expectedTaskDetails = await firstTaskRow.locator("td").allTextContents();
+  await firstTaskRow.click();
+  const taskDialog = page.getByRole("dialog", { name: "Task details" });
+  await taskDialog.waitFor();
+  assert.deepEqual(await taskDialog.locator("dt").allTextContents(), [
+    "Task Type",
+    "Task Subtype",
+    "Customer",
+    "Customer Name",
+    "Task ID",
+    "Status",
+  ]);
+  assert.deepEqual(await taskDialog.locator("dd").allTextContents(), expectedTaskDetails);
+  const closeTaskDialog = taskDialog.getByRole("button", { name: "Close", exact: true });
+  assert(await closeTaskDialog.evaluate((element) => element === document.activeElement));
+  await page.screenshot({ path: "/tmp/wise-task-detail-dialog.png", fullPage: true });
+  await closeTaskDialog.click();
+  await taskDialog.waitFor({ state: "detached" });
+  await page.waitForFunction(() => document.activeElement?.classList.contains("task-row-button"));
+
+  const firstTaskButton = firstTaskRow.locator(".task-row-button");
+  await firstTaskButton.focus();
+  await page.keyboard.press("Enter");
+  await taskDialog.waitFor();
+  await page.keyboard.press("Escape");
+  await taskDialog.waitFor({ state: "detached" });
+  await page.waitForFunction(() => document.activeElement?.classList.contains("task-row-button"));
+
+  await firstTaskButton.focus();
+  await page.keyboard.press("Space");
+  await taskDialog.waitFor();
+  await page.keyboard.press("Tab");
+  assert(await closeTaskDialog.evaluate((element) => element === document.activeElement));
+  await page.keyboard.press("Escape");
+  await taskDialog.waitFor({ state: "detached" });
+  console.log("ok task row mouse and keyboard detail dialog");
+
   await page.locator(".date-card").click();
   await page.getByRole("heading", { name: "Choose a date" }).waitFor();
   const currentMonth = await page.locator(".calendar-navigation strong").innerText();
@@ -171,6 +209,15 @@ try {
     clientWidth: document.documentElement.clientWidth,
   }));
   assert.equal(dimensions.scrollWidth, dimensions.clientWidth);
+  await page.locator(".task-row-button").first().click();
+  const mobileDialog = page.getByRole("dialog", { name: "Task details" });
+  await mobileDialog.waitFor();
+  const dialogBounds = await mobileDialog.boundingBox();
+  assert(dialogBounds);
+  assert(dialogBounds.y >= 0 && dialogBounds.y + dialogBounds.height <= 844);
+  assert.equal(await mobileDialog.locator(".task-detail-item").count(), 6);
+  await page.screenshot({ path: "/tmp/wise-task-detail-mobile.png", fullPage: false });
+  await mobileDialog.getByRole("button", { name: "Close", exact: true }).click();
   await page.screenshot({ path: "/tmp/wise-dashboard-mobile.png", fullPage: true });
   console.log("ok mobile layout", JSON.stringify(dimensions));
 

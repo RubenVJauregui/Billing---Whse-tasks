@@ -389,6 +389,65 @@ function DatePicker({
   );
 }
 
+function TaskDetailDialog({ task, onClose }: { task: Task; onClose: () => void }) {
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const details = [
+    ["Task Type", formatValue(task.taskType)],
+    ["Task Subtype", formatValue(task.taskSubtype)],
+    ["Customer", task.customer || "Not set"],
+    ["Customer Name", task.customerName || "Not set"],
+    ["Task ID", task.taskId || "Not set"],
+    ["Status", formatValue(task.status)],
+  ];
+
+  useEffect(() => {
+    closeRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      } else if (event.key === "Tab") {
+        event.preventDefault();
+        closeRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section
+        className="task-detail-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="task-detail-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header className="dialog-header">
+          <div>
+            <span className="eyebrow">Assigned task</span>
+            <h2 id="task-detail-title">Task details</h2>
+          </div>
+          <button ref={closeRef} type="button" className="text-button" onClick={onClose}>Close</button>
+        </header>
+        <dl className="task-detail-list">
+          {details.map(([label, value]) => (
+            <div className="task-detail-item" key={label}>
+              <dt>{label}</dt>
+              <dd className={label === "Task ID" || label === "Customer" ? "mono-cell" : ""}>
+                {label === "Status"
+                  ? <span className={statusClass(task.status)}>{value}</span>
+                  : value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [auth, setAuth] = useState<"checking" | "signedOut" | "signedIn">("checking");
   const [userName, setUserName] = useState("WISE user");
@@ -403,7 +462,9 @@ export default function Dashboard() {
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [view, setView] = useState<View>("details");
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const taskRequest = useRef<AbortController | null>(null);
+  const taskTrigger = useRef<HTMLButtonElement | null>(null);
 
   const loadTasks = useCallback(async (nextFacility: Facility, selection: TaskSelection = {}) => {
     taskRequest.current?.abort();
@@ -558,6 +619,21 @@ export default function Dashboard() {
     setView(nextView);
   }
 
+  function openTask(task: Task, trigger: HTMLButtonElement) {
+    taskTrigger.current = trigger;
+    setSelectedTask(task);
+  }
+
+  const closeTask = useCallback(() => {
+    setSelectedTask(null);
+    window.requestAnimationFrame(() => taskTrigger.current?.focus());
+  }, []);
+
+  function openTaskFromRow(event: React.MouseEvent<HTMLTableRowElement>, task: Task) {
+    const trigger = event.currentTarget.querySelector<HTMLButtonElement>(".task-row-button");
+    if (trigger) openTask(task, trigger);
+  }
+
   if (auth === "checking") {
     return <main className="app-loading"><div className="brand-mark"><Warehouse size={26} /></div><RefreshCw className="spin" size={22} /><span>Opening WISE...</span></main>;
   }
@@ -709,8 +785,21 @@ export default function Dashboard() {
                   <>
                     <thead><tr><th>Task Type</th><th>Task Subtype</th><th>Customer</th><th>Customer Name</th><th>Task ID</th><th>Status</th></tr></thead>
                     <tbody>{filteredTasks.map((task, index) => (
-                      <tr key={`${task.taskId}-${index}`}>
-                        <td className="strong-cell">{formatValue(task.taskType)}</td>
+                      <tr
+                        key={`${task.taskId}-${index}`}
+                        className="task-data-row"
+                        onClick={(event) => openTaskFromRow(event, task)}
+                      >
+                        <td className="strong-cell">
+                          <button
+                            type="button"
+                            className="task-row-button"
+                            aria-haspopup="dialog"
+                            aria-label={`Open task ${task.taskId || "details"}`}
+                          >
+                            {formatValue(task.taskType)}
+                          </button>
+                        </td>
                         <td>{formatValue(task.taskSubtype)}</td>
                         <td className="mono-cell">{task.customer}</td>
                         <td>{task.customerName}</td>
@@ -724,7 +813,11 @@ export default function Dashboard() {
                   <>
                     <thead><tr><th>Task ID</th><th>Status</th></tr></thead>
                     <tbody>{filteredTasks.map((task, index) => (
-                      <tr key={`${task.taskId}-${index}`}><td className="mono-cell strong-cell">{task.taskId}</td><td><span className={statusClass(task.status)}>{formatValue(task.status)}</span></td></tr>
+                      <tr
+                        key={`${task.taskId}-${index}`}
+                        className="task-data-row"
+                        onClick={(event) => openTaskFromRow(event, task)}
+                      ><td className="mono-cell strong-cell"><button type="button" className="task-row-button" aria-haspopup="dialog" aria-label={`Open task ${task.taskId || "details"}`}>{task.taskId}</button></td><td><span className={statusClass(task.status)}>{formatValue(task.status)}</span></td></tr>
                     ))}</tbody>
                   </>
                 )}
@@ -752,6 +845,7 @@ export default function Dashboard() {
       {datePickerOpen && (
         <DatePicker period={period} onSelectDay={selectDate} onSelectMonth={selectMonth} onClose={() => setDatePickerOpen(false)} />
       )}
+      {selectedTask && <TaskDetailDialog task={selectedTask} onClose={closeTask} />}
     </main>
   );
 }
