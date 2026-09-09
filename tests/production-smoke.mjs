@@ -157,6 +157,40 @@ try {
   await taskDialog.waitFor({ state: "detached" });
   console.log("ok task row mouse and keyboard detail dialog");
 
+  await page.locator(".view-tabs").getByRole("button", { name: "Customer Name", exact: true }).click();
+  const customerGroupRow = page.locator(".customer-group-row").first();
+  const customerGroupName = await customerGroupRow.locator("td").first().innerText();
+  const customerGroupCount = Number((await customerGroupRow.locator("td").nth(1).innerText()).replaceAll(",", ""));
+  await customerGroupRow.locator("td").nth(1).click();
+  const customerGroupDialog = page.getByRole("dialog", { name: customerGroupName, exact: true });
+  await customerGroupDialog.waitFor();
+  assert.match(await customerGroupDialog.locator(".customer-group-count").innerText(), new RegExp(`^${customerGroupCount.toLocaleString()} tasks?$`));
+  assert.deepEqual(await customerGroupDialog.locator("thead th").allTextContents(), [
+    "Task Type",
+    "Task Subtype",
+    "Customer",
+    "Customer Name",
+    "Task ID",
+    "Status",
+  ]);
+  assert.equal(await customerGroupDialog.locator("tbody tr").count(), customerGroupCount);
+  assert((await customerGroupDialog.locator("tbody tr td:nth-child(4)").allTextContents()).every((name) => name === customerGroupName));
+  const closeCustomerGroup = customerGroupDialog.getByRole("button", { name: "Close", exact: true });
+  assert(await closeCustomerGroup.evaluate((element) => element === document.activeElement));
+  await page.screenshot({ path: "/tmp/wise-customer-name-group.png", fullPage: false });
+  await closeCustomerGroup.click();
+  await customerGroupDialog.waitFor({ state: "detached" });
+  await page.waitForFunction(() => document.activeElement?.classList.contains("customer-group-button"));
+
+  const customerGroupButton = customerGroupRow.locator(".customer-group-button");
+  await customerGroupButton.focus();
+  await page.keyboard.press("Enter");
+  await customerGroupDialog.waitFor();
+  await page.keyboard.press("Escape");
+  await customerGroupDialog.waitFor({ state: "detached" });
+  await page.waitForFunction(() => document.activeElement?.classList.contains("customer-group-button"));
+  console.log("ok customer-name group mouse and keyboard drill-down", customerGroupName, customerGroupCount);
+
   await page.locator(".date-card").click();
   await page.getByRole("heading", { name: "Choose a date" }).waitFor();
   const currentMonth = await page.locator(".calendar-navigation strong").innerText();

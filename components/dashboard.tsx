@@ -34,6 +34,11 @@ type TaskPeriod = {
 
 type TaskSelection = { date?: string; month?: string };
 
+type CustomerNameGroup = {
+  name: string;
+  tasks: Task[];
+};
+
 type View =
   | "details"
   | "taskType"
@@ -448,6 +453,70 @@ function TaskDetailDialog({ task, onClose }: { task: Task; onClose: () => void }
   );
 }
 
+function CustomerNameDialog({
+  group,
+  onClose,
+}: {
+  group: CustomerNameGroup;
+  onClose: () => void;
+}) {
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    closeRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      } else if (event.key === "Tab") {
+        event.preventDefault();
+        closeRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section
+        className="customer-name-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="customer-name-dialog-title"
+        aria-describedby="customer-name-dialog-count"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header className="dialog-header">
+          <div>
+            <span className="eyebrow">Customer Name</span>
+            <h2 id="customer-name-dialog-title">{group.name}</h2>
+            <p id="customer-name-dialog-count" className="customer-group-count">
+              {group.tasks.length.toLocaleString()} {group.tasks.length === 1 ? "task" : "tasks"}
+            </p>
+          </div>
+          <button ref={closeRef} type="button" className="text-button" onClick={onClose}>Close</button>
+        </header>
+        <div className="customer-group-table">
+          <table>
+            <thead><tr><th>Task Type</th><th>Task Subtype</th><th>Customer</th><th>Customer Name</th><th>Task ID</th><th>Status</th></tr></thead>
+            <tbody>{group.tasks.map((task, index) => (
+              <tr key={`${task.taskId}-${index}`}>
+                <td className="strong-cell">{formatValue(task.taskType)}</td>
+                <td>{formatValue(task.taskSubtype)}</td>
+                <td className="mono-cell">{task.customer || "Not set"}</td>
+                <td>{task.customerName || "Not set"}</td>
+                <td className="mono-cell">{task.taskId || "Not set"}</td>
+                <td><span className={statusClass(task.status)}>{formatValue(task.status)}</span></td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [auth, setAuth] = useState<"checking" | "signedOut" | "signedIn">("checking");
   const [userName, setUserName] = useState("WISE user");
@@ -463,8 +532,10 @@ export default function Dashboard() {
   const [query, setQuery] = useState("");
   const [view, setView] = useState<View>("details");
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [selectedCustomerGroup, setSelectedCustomerGroup] = useState<CustomerNameGroup | null>(null);
   const taskRequest = useRef<AbortController | null>(null);
   const taskTrigger = useRef<HTMLButtonElement | null>(null);
+  const customerGroupTrigger = useRef<HTMLButtonElement | null>(null);
 
   const loadTasks = useCallback(async (nextFacility: Facility, selection: TaskSelection = {}) => {
     taskRequest.current?.abort();
@@ -633,6 +704,24 @@ export default function Dashboard() {
     const trigger = event.currentTarget.querySelector<HTMLButtonElement>(".task-row-button");
     if (trigger) openTask(task, trigger);
   }
+
+  function openCustomerGroup(name: string, trigger: HTMLButtonElement) {
+    customerGroupTrigger.current = trigger;
+    setSelectedCustomerGroup({
+      name,
+      tasks: filteredTasks.filter((task) => (task.customerName || "Not set") === name),
+    });
+  }
+
+  function openCustomerGroupFromRow(event: React.MouseEvent<HTMLTableRowElement>, name: string) {
+    const trigger = event.currentTarget.querySelector<HTMLButtonElement>(".customer-group-button");
+    if (trigger) openCustomerGroup(name, trigger);
+  }
+
+  const closeCustomerGroup = useCallback(() => {
+    setSelectedCustomerGroup(null);
+    window.requestAnimationFrame(() => customerGroupTrigger.current?.focus());
+  }, []);
 
   if (auth === "checking") {
     return <main className="app-loading"><div className="brand-mark"><Warehouse size={26} /></div><RefreshCw className="spin" size={22} /><span>Opening WISE...</span></main>;
@@ -825,7 +914,25 @@ export default function Dashboard() {
                   <>
                     <thead><tr><th>{columnLabels[view]}</th><th className="count-column">Task Count</th></tr></thead>
                     <tbody>{groupedRows.map(([value, count]) => (
-                      <tr key={value}><td className="strong-cell">{view === "taskType" || view === "taskSubtype" ? formatValue(value) : value}</td><td className="count-column">{count.toLocaleString()}</td></tr>
+                      <tr
+                        key={value}
+                        className={view === "customerName" ? "task-data-row customer-group-row" : ""}
+                        onClick={view === "customerName" ? (event) => openCustomerGroupFromRow(event, value) : undefined}
+                      >
+                        <td className="strong-cell">
+                          {view === "customerName" ? (
+                            <button
+                              type="button"
+                              className="task-row-button customer-group-button"
+                              aria-haspopup="dialog"
+                              aria-label={`Open tasks for ${value}`}
+                            >
+                              {value}
+                            </button>
+                          ) : view === "taskType" || view === "taskSubtype" ? formatValue(value) : value}
+                        </td>
+                        <td className="count-column">{count.toLocaleString()}</td>
+                      </tr>
                     ))}</tbody>
                   </>
                 )}
@@ -846,6 +953,7 @@ export default function Dashboard() {
         <DatePicker period={period} onSelectDay={selectDate} onSelectMonth={selectMonth} onClose={() => setDatePickerOpen(false)} />
       )}
       {selectedTask && <TaskDetailDialog task={selectedTask} onClose={closeTask} />}
+      {selectedCustomerGroup && <CustomerNameDialog group={selectedCustomerGroup} onClose={closeCustomerGroup} />}
     </main>
   );
 }
