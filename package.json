@@ -12,7 +12,8 @@
     "lucide-react": "^1.43.0",
     "next": "16.3.4",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "write-excel-file": "^4.1.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -22,6 +23,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
     "playwright": "^1.63.0",
+    "read-excel-file": "^9.3.10",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

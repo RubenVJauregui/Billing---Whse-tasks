@@ -8,6 +8,8 @@ import {
   Warehouse,
 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import ExportButton from "@/components/export-button";
+import type { ExcelCell } from "@/lib/export-excel";
 
 type Facility = {
   id: string;
@@ -82,6 +84,43 @@ const columnLabels: Record<Exclude<View, "details">, string> = {
   taskId: "Task ID",
   status: "Status",
 };
+
+const taskExportColumns = [
+  "Task Type",
+  "Task Subtype",
+  "Customer",
+  "Customer Name",
+  "Task ID",
+  "Status",
+];
+
+function taskExportRows(tasks: Task[]): ExcelCell[][] {
+  return tasks.map((task) => [
+    formatValue(task.taskType),
+    formatValue(task.taskSubtype),
+    task.customer || "Not set",
+    task.customerName || "Not set",
+    task.taskId || "Not set",
+    formatValue(task.status),
+  ]);
+}
+
+function trapDialogFocus(event: React.KeyboardEvent<HTMLElement>) {
+  if (event.key !== "Tab") return;
+  const controls = Array.from(
+    event.currentTarget.querySelectorAll<HTMLElement>("button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled)"),
+  );
+  const first = controls[0];
+  const last = controls.at(-1);
+  if (!first || !last) return;
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
 
 function formatValue(value: string) {
   if (!value) return "Not set";
@@ -411,9 +450,6 @@ function TaskDetailDialog({ task, onClose }: { task: Task; onClose: () => void }
       if (event.key === "Escape") {
         event.preventDefault();
         onClose();
-      } else if (event.key === "Tab") {
-        event.preventDefault();
-        closeRef.current?.focus();
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -428,13 +464,23 @@ function TaskDetailDialog({ task, onClose }: { task: Task; onClose: () => void }
         aria-modal="true"
         aria-labelledby="task-detail-title"
         onMouseDown={(event) => event.stopPropagation()}
+        onKeyDown={trapDialogFocus}
       >
         <header className="dialog-header">
           <div>
             <span className="eyebrow">Assigned task</span>
             <h2 id="task-detail-title">Task details</h2>
           </div>
-          <button ref={closeRef} type="button" className="text-button" onClick={onClose}>Close</button>
+          <div className="dialog-actions">
+            <ExportButton
+              filename={`WISE Task ${task.taskId || "details"}`}
+              sheetName="Task details"
+              columns={taskExportColumns}
+              rows={taskExportRows([task])}
+              className="dialog-export-control"
+            />
+            <button ref={closeRef} type="button" className="text-button" onClick={onClose}>Close</button>
+          </div>
         </header>
         <dl className="task-detail-list">
           {details.map(([label, value]) => (
@@ -468,9 +514,6 @@ function CustomerNameDialog({
       if (event.key === "Escape") {
         event.preventDefault();
         onClose();
-      } else if (event.key === "Tab") {
-        event.preventDefault();
-        closeRef.current?.focus();
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -486,6 +529,7 @@ function CustomerNameDialog({
         aria-labelledby="customer-name-dialog-title"
         aria-describedby="customer-name-dialog-count"
         onMouseDown={(event) => event.stopPropagation()}
+        onKeyDown={trapDialogFocus}
       >
         <header className="dialog-header">
           <div>
@@ -495,7 +539,16 @@ function CustomerNameDialog({
               {group.tasks.length.toLocaleString()} {group.tasks.length === 1 ? "task" : "tasks"}
             </p>
           </div>
-          <button ref={closeRef} type="button" className="text-button" onClick={onClose}>Close</button>
+          <div className="dialog-actions">
+            <ExportButton
+              filename={`WISE Customer ${group.name}`}
+              sheetName="Customer tasks"
+              columns={taskExportColumns}
+              rows={taskExportRows(group.tasks)}
+              className="dialog-export-control"
+            />
+            <button ref={closeRef} type="button" className="text-button" onClick={onClose}>Close</button>
+          </div>
         </header>
         <div className="customer-group-table">
           <table>
@@ -655,6 +708,42 @@ export default function Dashboard() {
     return [...values.entries()].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]));
   }, [filteredTasks, view]);
 
+  const mainExport = useMemo(() => {
+    const viewLabel = views.find((item) => item.key === view)?.label || "Tasks";
+    const exportName = `WISE ${facility.name} ${period.startDate || "current"} ${viewLabel}`;
+    if (view === "details") {
+      return {
+        filename: exportName,
+        sheetName: "Task workload",
+        columns: taskExportColumns,
+        rows: taskExportRows(filteredTasks),
+      };
+    }
+    if (view === "status") {
+      return {
+        filename: exportName,
+        sheetName: "Task status",
+        columns: ["Task ID", "Status"],
+        rows: filteredTasks.map((task) => [task.taskId || "Not set", formatValue(task.status)]),
+      };
+    }
+    return {
+      filename: exportName,
+      sheetName: viewLabel,
+      columns: [columnLabels[view], "Task Count"],
+      rows: groupedRows.map(([value, count]) => [
+        view === "taskType" || view === "taskSubtype" ? formatValue(value) : value,
+        count,
+      ]),
+    };
+  }, [facility.name, filteredTasks, groupedRows, period.startDate, view]);
+
+  const exportUnavailableReason = loadingFacilities || loadingTasks
+    ? "Wait for assigned tasks to finish loading before exporting."
+    : error
+      ? "Task data is unavailable. Try again before exporting."
+      : undefined;
+
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
     taskRequest.current?.abort();
@@ -751,13 +840,23 @@ export default function Dashboard() {
             <h1>Assigned Tasks</h1>
             <p>{periodLabel(period)} · {facility.name} local time</p>
           </div>
-          <button
-            className="refresh-button"
-            onClick={() => loadTasks(facility, selectionForPeriod(period))}
-            disabled={loadingTasks || loadingFacilities || !facility.id}
-          >
-            <span>{loadingTasks ? "Refreshing" : "Refresh"}</span>
-          </button>
+          <div className="page-actions">
+            <ExportButton
+              key={`${facility.id}-${period.startDate}-${view}-${query}`}
+              filename={mainExport.filename}
+              sheetName={mainExport.sheetName}
+              columns={mainExport.columns}
+              rows={mainExport.rows}
+              unavailableReason={exportUnavailableReason}
+            />
+            <button
+              className="refresh-button"
+              onClick={() => loadTasks(facility, selectionForPeriod(period))}
+              disabled={loadingTasks || loadingFacilities || !facility.id}
+            >
+              <span>{loadingTasks ? "Refreshing" : "Refresh"}</span>
+            </button>
+          </div>
         </section>
 
         <section className="summary-grid" aria-label="Task summary">

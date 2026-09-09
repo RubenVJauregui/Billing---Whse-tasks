@@ -90,6 +90,7 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 .eyebrow { display: block; color: var(--primary-bright); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .page-heading h1 { margin: 8px 0 6px; font-size: 30px; line-height: 1.1; letter-spacing: 0; }
 .page-heading p, .task-toolbar p { margin: 0; color: var(--muted); font-size: 13px; }
+.page-actions { display: flex; align-items: flex-start; justify-content: flex-end; gap: 10px; }
 
 .refresh-button, .state-panel button, .primary-button {
   display: inline-flex;
@@ -106,6 +107,12 @@ button:disabled { cursor: not-allowed; opacity: .52; }
   font-size: 13px;
 }
 .refresh-button:hover, .state-panel button:hover { background: var(--surface-hover); }
+.export-control { min-width: 126px; display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
+.export-button { min-height: 38px; padding: 0 14px; border: 1px solid #8fc9ad; border-radius: 7px; background: #edfaf2; color: #156b46; cursor: pointer; font-size: 13px; font-weight: 700; white-space: nowrap; }
+.export-button:hover:not(:disabled) { border-color: #64ad88; background: #def6e8; }
+.export-feedback { max-width: 260px; color: var(--muted); font-size: 11px; line-height: 1.35; text-align: right; }
+.export-feedback.success { color: var(--green); }
+.export-feedback.error { color: var(--red); }
 
 .summary-grid { display: grid; grid-template-columns: minmax(150px, .5fr) repeat(4, minmax(160px, 1fr)); gap: 12px; margin-bottom: 28px; }
 .summary-card {
@@ -194,6 +201,8 @@ tbody tr:hover td { background: #f2f7fc; }
 .customer-name-dialog { width: min(1100px, 100%); }
 .dialog-header { display: flex; align-items: center; justify-content: space-between; padding: 22px 22px 16px; }
 .dialog-header h2 { margin: 7px 0 0; font-size: 20px; letter-spacing: 0; }
+.dialog-actions { display: flex; align-items: flex-start; gap: 9px; }
+.dialog-export-control { min-width: 126px; }
 .customer-group-count { margin: 7px 0 0; color: var(--muted); font-size: 12px; }
 .dialog-search { height: 42px; display: flex; align-items: center; gap: 9px; margin: 0 22px 14px; padding: 0 12px; border: 1px solid var(--border); border-radius: 7px; background: #f7fafc; color: var(--muted); }
 .dialog-search:focus-within { border-color: var(--primary-bright); }
@@ -262,8 +271,9 @@ tbody tr:hover td { background: #f2f7fc; }
   .topbar { padding: 0 18px; }
   .user-name, .brand-lockup span { display: none; }
   .dashboard-content { padding: 28px 16px 36px; }
-  .page-heading { align-items: flex-start; }
+  .page-heading { align-items: flex-start; flex-direction: column; }
   .page-heading h1 { font-size: 26px; }
+  .page-actions { width: 100%; flex-wrap: wrap; }
   .refresh-button { padding: 0 12px; }
   .summary-grid { grid-template-columns: 1fr; }
   .summary-card { min-height: 80px; }
@@ -272,6 +282,10 @@ tbody tr:hover td { background: #f2f7fc; }
   .state-panel { flex-direction: column; text-align: center; }
   .state-panel button { margin: 8px 0 0; }
   .task-detail-list { grid-template-columns: 1fr; }
+  .task-detail-dialog .dialog-header, .customer-name-dialog .dialog-header { align-items: stretch; flex-direction: column; gap: 16px; }
+  .dialog-actions { justify-content: space-between; }
+  .dialog-export-control { align-items: flex-start; }
+  .dialog-export-control .export-feedback { text-align: left; }
   .login-brand { min-height: 28vh; padding: 30px 24px; }
   .login-brand h1 { font-size: 28px; }
   .login-panel { justify-content: flex-start; padding: 38px 24px; }

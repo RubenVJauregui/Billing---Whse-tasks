@@ -1,7 +1,33 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { chromium } from "playwright";
+import readXlsxFile from "read-excel-file/node";
+
+async function readExcelDownload(download) {
+  assert.match(download.suggestedFilename(), /\.xlsx$/i);
+  const downloadPath = await download.path();
+  assert(downloadPath);
+  const contents = await readFile(downloadPath);
+  assert.equal(contents.subarray(0, 2).toString(), "PK");
+
+  const sheets = await readXlsxFile(downloadPath);
+  assert.equal(sheets.length, 1);
+  const rows = sheets[0].data;
+  assert(rows.length > 0);
+  return {
+    headers: rows[0].map(String),
+    rowCount: rows.length - 1,
+  };
+}
+
+async function exportWorkbook(page, button) {
+  const downloadPromise = page.waitForEvent("download");
+  await button.click();
+  return readExcelDownload(await downloadPromise);
+}
 
 const accessToken = (process.env.ITEM_AUTHORIZATION || "").replace(/^Bearer\s+/i, "");
+const baseUrl = process.env.TEST_BASE_URL || "http://localhost:3000";
 assert(accessToken, "ITEM_AUTHORIZATION is required for the authenticated smoke test");
 
 const browser = await chromium.launch({
@@ -22,7 +48,7 @@ try {
     if (request.url().includes("/api/tasks?")) taskRequests.push(request.url());
   });
 
-  const initialResponse = await page.goto("http://localhost:3000", { waitUntil: "domcontentloaded" });
+  const initialResponse = await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
   assert(initialResponse);
   assert.equal(initialResponse.headers()["x-frame-options"], undefined);
   assert(!/frame-ancestors\s+[^;]*(?:'none'|'self')/i.test(initialResponse.headers()["content-security-policy"] || ""));
@@ -115,9 +141,23 @@ try {
     assert.equal(await control.getAttribute("aria-pressed"), "true");
     assert.deepEqual(await page.locator("thead th").allTextContents(), headers);
     if (label === "Show All") assert.equal(await page.getByLabel("Search tasks").inputValue(), "");
+    const displayedRowCount = await page.locator(".table-wrap tbody tr").count();
+    const exportedView = await exportWorkbook(
+      page,
+      page.getByRole("button", { name: "Export to Excel", exact: true }),
+    );
+    assert.deepEqual(exportedView.headers, headers);
+    assert.equal(exportedView.rowCount, displayedRowCount);
+    await page.locator(".page-actions .export-feedback.success").filter({ hasText: "Excel export downloaded." }).waitFor();
   }
   assert.equal(await page.locator('.view-tabs button[aria-pressed="true"]').count(), 1);
-  console.log("ok all column navigation views by keyboard");
+  console.log("ok all column navigation views and Excel downloads");
+
+  await page.getByLabel("Search tasks").fill("__no_matching_task__");
+  await page.getByRole("button", { name: "Export to Excel", exact: true }).click();
+  assert.match(await page.locator(".page-actions .export-feedback.error").innerText(), /no displayed data/i);
+  await page.getByLabel("Search tasks").fill("");
+  console.log("ok empty export feedback");
 
   const firstTaskRow = page.locator(".task-data-row").first();
   const expectedTaskDetails = await firstTaskRow.locator("td").allTextContents();
@@ -135,6 +175,19 @@ try {
   assert.deepEqual(await taskDialog.locator("dd").allTextContents(), expectedTaskDetails);
   const closeTaskDialog = taskDialog.getByRole("button", { name: "Close", exact: true });
   assert(await closeTaskDialog.evaluate((element) => element === document.activeElement));
+  const exportedTask = await exportWorkbook(
+    page,
+    taskDialog.getByRole("button", { name: "Export to Excel", exact: true }),
+  );
+  assert.deepEqual(exportedTask.headers, [
+    "Task Type",
+    "Task Subtype",
+    "Customer",
+    "Customer Name",
+    "Task ID",
+    "Status",
+  ]);
+  assert.equal(exportedTask.rowCount, 1);
   await page.screenshot({ path: "/tmp/wise-task-detail-dialog.png", fullPage: true });
   await closeTaskDialog.click();
   await taskDialog.waitFor({ state: "detached" });
@@ -152,7 +205,7 @@ try {
   await page.keyboard.press("Space");
   await taskDialog.waitFor();
   await page.keyboard.press("Tab");
-  assert(await closeTaskDialog.evaluate((element) => element === document.activeElement));
+  assert(await taskDialog.getByRole("button", { name: "Export to Excel", exact: true }).evaluate((element) => element === document.activeElement));
   await page.keyboard.press("Escape");
   await taskDialog.waitFor({ state: "detached" });
   console.log("ok task row mouse and keyboard detail dialog");
@@ -177,6 +230,19 @@ try {
   assert((await customerGroupDialog.locator("tbody tr td:nth-child(4)").allTextContents()).every((name) => name === customerGroupName));
   const closeCustomerGroup = customerGroupDialog.getByRole("button", { name: "Close", exact: true });
   assert(await closeCustomerGroup.evaluate((element) => element === document.activeElement));
+  const exportedCustomerGroup = await exportWorkbook(
+    page,
+    customerGroupDialog.getByRole("button", { name: "Export to Excel", exact: true }),
+  );
+  assert.deepEqual(exportedCustomerGroup.headers, [
+    "Task Type",
+    "Task Subtype",
+    "Customer",
+    "Customer Name",
+    "Task ID",
+    "Status",
+  ]);
+  assert.equal(exportedCustomerGroup.rowCount, customerGroupCount);
   await page.screenshot({ path: "/tmp/wise-customer-name-group.png", fullPage: false });
   await closeCustomerGroup.click();
   await customerGroupDialog.waitFor({ state: "detached" });
