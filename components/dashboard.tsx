@@ -36,11 +36,6 @@ type TaskPeriod = {
 
 type TaskSelection = { date?: string; month?: string };
 
-type CustomerNameGroup = {
-  name: string;
-  tasks: Task[];
-};
-
 type View =
   | "details"
   | "taskType"
@@ -49,6 +44,14 @@ type View =
   | "customerName"
   | "taskId"
   | "status";
+
+type GroupView = Exclude<View, "details" | "taskId">;
+
+type TaskGroup = {
+  view: GroupView;
+  label: string;
+  tasks: Task[];
+};
 
 type ApiError = { message?: string };
 
@@ -129,6 +132,12 @@ function formatValue(value: string) {
     .replace(/([a-z])([A-Z])/g, "$1 $2")
     .toLowerCase()
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatGroupLabel(view: GroupView, value: string) {
+  return view === "taskType" || view === "taskSubtype" || view === "status"
+    ? formatValue(value)
+    : value;
 }
 
 function formatDate(date: string) {
@@ -499,11 +508,11 @@ function TaskDetailDialog({ task, onClose }: { task: Task; onClose: () => void }
   );
 }
 
-function CustomerNameDialog({
+function TaskGroupDialog({
   group,
   onClose,
 }: {
-  group: CustomerNameGroup;
+  group: TaskGroup;
   onClose: () => void;
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -526,23 +535,23 @@ function CustomerNameDialog({
         className="customer-name-dialog"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="customer-name-dialog-title"
-        aria-describedby="customer-name-dialog-count"
+        aria-labelledby="task-group-dialog-title"
+        aria-describedby="task-group-dialog-count"
         onMouseDown={(event) => event.stopPropagation()}
         onKeyDown={trapDialogFocus}
       >
         <header className="dialog-header">
           <div>
-            <span className="eyebrow">Customer Name</span>
-            <h2 id="customer-name-dialog-title">{group.name}</h2>
-            <p id="customer-name-dialog-count" className="customer-group-count">
+            <span className="eyebrow">{columnLabels[group.view]}</span>
+            <h2 id="task-group-dialog-title">{group.label}</h2>
+            <p id="task-group-dialog-count" className="customer-group-count">
               {group.tasks.length.toLocaleString()} {group.tasks.length === 1 ? "task" : "tasks"}
             </p>
           </div>
           <div className="dialog-actions">
             <ExportButton
-              filename={`WISE Customer ${group.name}`}
-              sheetName="Customer tasks"
+              filename={`WISE ${columnLabels[group.view]} ${group.label}`}
+              sheetName={`${columnLabels[group.view]} tasks`}
               columns={taskExportColumns}
               rows={taskExportRows(group.tasks)}
               className="dialog-export-control"
@@ -585,10 +594,10 @@ export default function Dashboard() {
   const [query, setQuery] = useState("");
   const [view, setView] = useState<View>("details");
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [selectedCustomerGroup, setSelectedCustomerGroup] = useState<CustomerNameGroup | null>(null);
+  const [selectedTaskGroup, setSelectedTaskGroup] = useState<TaskGroup | null>(null);
   const taskRequest = useRef<AbortController | null>(null);
   const taskTrigger = useRef<HTMLButtonElement | null>(null);
-  const customerGroupTrigger = useRef<HTMLButtonElement | null>(null);
+  const taskGroupTrigger = useRef<HTMLButtonElement | null>(null);
 
   const loadTasks = useCallback(async (nextFacility: Facility, selection: TaskSelection = {}) => {
     taskRequest.current?.abort();
@@ -699,7 +708,7 @@ export default function Dashboard() {
   }, [query, tasks]);
 
   const groupedRows = useMemo(() => {
-    if (view === "details" || view === "status") return [];
+    if (view === "details" || view === "taskId") return [];
     const values = new Map<string, number>();
     for (const task of filteredTasks) {
       const value = task[view] || "Not set";
@@ -719,10 +728,10 @@ export default function Dashboard() {
         rows: taskExportRows(filteredTasks),
       };
     }
-    if (view === "status") {
+    if (view === "taskId") {
       return {
         filename: exportName,
-        sheetName: "Task status",
+        sheetName: "Task IDs",
         columns: ["Task ID", "Status"],
         rows: filteredTasks.map((task) => [task.taskId || "Not set", formatValue(task.status)]),
       };
@@ -732,7 +741,7 @@ export default function Dashboard() {
       sheetName: viewLabel,
       columns: [columnLabels[view], "Task Count"],
       rows: groupedRows.map(([value, count]) => [
-        view === "taskType" || view === "taskSubtype" ? formatValue(value) : value,
+        formatGroupLabel(view, value),
         count,
       ]),
     };
@@ -794,22 +803,23 @@ export default function Dashboard() {
     if (trigger) openTask(task, trigger);
   }
 
-  function openCustomerGroup(name: string, trigger: HTMLButtonElement) {
-    customerGroupTrigger.current = trigger;
-    setSelectedCustomerGroup({
-      name,
-      tasks: filteredTasks.filter((task) => (task.customerName || "Not set") === name),
+  function openTaskGroup(view: GroupView, value: string, trigger: HTMLButtonElement) {
+    taskGroupTrigger.current = trigger;
+    setSelectedTaskGroup({
+      view,
+      label: formatGroupLabel(view, value),
+      tasks: filteredTasks.filter((task) => (task[view] || "Not set") === value),
     });
   }
 
-  function openCustomerGroupFromRow(event: React.MouseEvent<HTMLTableRowElement>, name: string) {
-    const trigger = event.currentTarget.querySelector<HTMLButtonElement>(".customer-group-button");
-    if (trigger) openCustomerGroup(name, trigger);
+  function openTaskGroupFromRow(event: React.MouseEvent<HTMLTableRowElement>, view: GroupView, value: string) {
+    const trigger = event.currentTarget.querySelector<HTMLButtonElement>(".task-group-button");
+    if (trigger) openTaskGroup(view, value, trigger);
   }
 
-  const closeCustomerGroup = useCallback(() => {
-    setSelectedCustomerGroup(null);
-    window.requestAnimationFrame(() => customerGroupTrigger.current?.focus());
+  const closeTaskGroup = useCallback(() => {
+    setSelectedTaskGroup(null);
+    window.requestAnimationFrame(() => taskGroupTrigger.current?.focus());
   }, []);
 
   if (auth === "checking") {
@@ -997,7 +1007,7 @@ export default function Dashboard() {
                     ))}</tbody>
                   </>
                 )}
-                {view === "status" && (
+                {view === "taskId" && (
                   <>
                     <thead><tr><th>Task ID</th><th>Status</th></tr></thead>
                     <tbody>{filteredTasks.map((task, index) => (
@@ -1009,26 +1019,24 @@ export default function Dashboard() {
                     ))}</tbody>
                   </>
                 )}
-                {view !== "details" && view !== "status" && (
+                {view !== "details" && view !== "taskId" && (
                   <>
                     <thead><tr><th>{columnLabels[view]}</th><th className="count-column">Task Count</th></tr></thead>
                     <tbody>{groupedRows.map(([value, count]) => (
                       <tr
                         key={value}
-                        className={view === "customerName" ? "task-data-row customer-group-row" : ""}
-                        onClick={view === "customerName" ? (event) => openCustomerGroupFromRow(event, value) : undefined}
+                        className="task-data-row task-group-row"
+                        onClick={(event) => openTaskGroupFromRow(event, view, value)}
                       >
                         <td className="strong-cell">
-                          {view === "customerName" ? (
-                            <button
-                              type="button"
-                              className="task-row-button customer-group-button"
-                              aria-haspopup="dialog"
-                              aria-label={`Open tasks for ${value}`}
-                            >
-                              {value}
-                            </button>
-                          ) : view === "taskType" || view === "taskSubtype" ? formatValue(value) : value}
+                          <button
+                            type="button"
+                            className="task-row-button task-group-button"
+                            aria-haspopup="dialog"
+                            aria-label={`Open ${count.toLocaleString()} ${count === 1 ? "task" : "tasks"} for ${columnLabels[view]} ${formatGroupLabel(view, value)}`}
+                          >
+                            {formatGroupLabel(view, value)}
+                          </button>
                         </td>
                         <td className="count-column">{count.toLocaleString()}</td>
                       </tr>
@@ -1052,7 +1060,7 @@ export default function Dashboard() {
         <DatePicker period={period} onSelectDay={selectDate} onSelectMonth={selectMonth} onClose={() => setDatePickerOpen(false)} />
       )}
       {selectedTask && <TaskDetailDialog task={selectedTask} onClose={closeTask} />}
-      {selectedCustomerGroup && <CustomerNameDialog group={selectedCustomerGroup} onClose={closeCustomerGroup} />}
+      {selectedTaskGroup && <TaskGroupDialog group={selectedTaskGroup} onClose={closeTaskGroup} />}
     </main>
   );
 }
