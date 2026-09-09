@@ -604,15 +604,33 @@ export default function Dashboard() {
           >
             <div className="summary-body"><span>Facility</span><strong>{facility.name}</strong></div>
           </button>
-          <article className="summary-card">
+          <button
+            type="button"
+            className="summary-card kpi-card"
+            onClick={() => selectView("details")}
+            disabled={loadingTasks || loadingFacilities}
+            aria-pressed={view === "details"}
+          >
             <div className="summary-body"><span>Assigned tasks</span><strong>{loadingTasks || loadingFacilities ? "—" : tasks.length.toLocaleString()}</strong></div>
-          </article>
-          <article className="summary-card">
+          </button>
+          <button
+            type="button"
+            className="summary-card kpi-card"
+            onClick={() => selectView("customer")}
+            disabled={loadingTasks || loadingFacilities}
+            aria-pressed={view === "customer"}
+          >
             <div className="summary-body"><span>Customers</span><strong>{loadingTasks || loadingFacilities ? "—" : counts.customers.toLocaleString()}</strong></div>
-          </article>
-          <article className="summary-card">
+          </button>
+          <button
+            type="button"
+            className="summary-card kpi-card"
+            onClick={() => selectView("taskType")}
+            disabled={loadingTasks || loadingFacilities}
+            aria-pressed={view === "taskType"}
+          >
             <div className="summary-body"><span>Task types</span><strong>{loadingTasks || loadingFacilities ? "—" : counts.types.toLocaleString()}</strong></div>
-          </article>
+          </button>
           <button
             className="summary-card date-card"
             onClick={() => setDatePickerOpen(true)}
@@ -643,7 +661,14 @@ export default function Dashboard() {
 
           <nav className="view-tabs" aria-label="Task views">
             {views.map((item) => (
-              <button key={item.key} className={view === item.key ? "active" : ""} onClick={() => selectView(item.key)}>
+              <button
+                key={item.key}
+                type="button"
+                className={view === item.key ? "active" : ""}
+                onClick={() => selectView(item.key)}
+                disabled={loadingTasks || loadingFacilities}
+                aria-pressed={view === item.key}
+              >
                 {item.label}
               </button>
             ))}

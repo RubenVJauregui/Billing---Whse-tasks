@@ -72,11 +72,21 @@ try {
   ]);
   console.log("ok Valley View dashboard", cards.join(" | "));
 
-  await page.getByRole("button", { name: "Status", exact: true }).click();
-  assert.deepEqual(await page.locator("thead th").allTextContents(), ["Task ID", "Status"]);
-  console.log("ok task-level status view");
-
-  await page.getByRole("button", { name: "Show All", exact: true }).click();
+  const assignedTasksCard = page.getByRole("button", { name: /^Assigned tasks/ });
+  const customersCard = page.getByRole("button", { name: /^Customers/ });
+  const taskTypesCard = page.getByRole("button", { name: /^Task types/ });
+  await customersCard.click();
+  assert.equal(await customersCard.getAttribute("aria-pressed"), "true");
+  assert.deepEqual(await page.locator("thead th").allTextContents(), ["Customer", "Task Count"]);
+  await taskTypesCard.focus();
+  await page.keyboard.press("Enter");
+  assert.equal(await taskTypesCard.getAttribute("aria-pressed"), "true");
+  assert.deepEqual(await page.locator("thead th").allTextContents(), ["Task Type", "Task Count"]);
+  await page.getByLabel("Search tasks").fill("Load");
+  await assignedTasksCard.focus();
+  await page.keyboard.press("Space");
+  assert.equal(await assignedTasksCard.getAttribute("aria-pressed"), "true");
+  assert.equal(await page.getByLabel("Search tasks").inputValue(), "");
   assert.deepEqual(await page.locator("thead th").allTextContents(), [
     "Task Type",
     "Task Subtype",
@@ -85,7 +95,29 @@ try {
     "Task ID",
     "Status",
   ]);
-  console.log("ok Show All task-detail view");
+  assert.deepEqual(await page.locator(".summary-card").allTextContents(), cards);
+  console.log("ok KPI card mouse and keyboard interactions");
+
+  const viewChecks = [
+    ["Task Type", ["Task Type", "Task Count"]],
+    ["Task Subtype", ["Task Subtype", "Task Count"]],
+    ["Customer", ["Customer", "Task Count"]],
+    ["Customer Name", ["Customer Name", "Task Count"]],
+    ["Task ID", ["Task ID", "Task Count"]],
+    ["Status", ["Task ID", "Status"]],
+    ["Show All", ["Task Type", "Task Subtype", "Customer", "Customer Name", "Task ID", "Status"]],
+  ];
+  for (const [index, [label, headers]] of viewChecks.entries()) {
+    const control = page.locator(".view-tabs").getByRole("button", { name: label, exact: true });
+    if (label === "Show All") await page.getByLabel("Search tasks").fill("Load");
+    await control.focus();
+    await page.keyboard.press(index % 2 === 0 ? "Enter" : "Space");
+    assert.equal(await control.getAttribute("aria-pressed"), "true");
+    assert.deepEqual(await page.locator("thead th").allTextContents(), headers);
+    if (label === "Show All") assert.equal(await page.getByLabel("Search tasks").inputValue(), "");
+  }
+  assert.equal(await page.locator('.view-tabs button[aria-pressed="true"]').count(), 1);
+  console.log("ok all column navigation views by keyboard");
 
   await page.locator(".date-card").click();
   await page.getByRole("heading", { name: "Choose a date" }).waitFor();
