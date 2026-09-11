@@ -47,9 +47,10 @@ type View =
   | "customer"
   | "customerName"
   | "taskId"
-  | "status";
+  | "status"
+  | "dollarAmount";
 
-type GroupView = Exclude<View, "details" | "taskId">;
+type GroupView = Exclude<View, "details" | "taskId" | "dollarAmount">;
 
 type TaskGroup = {
   view: GroupView;
@@ -74,6 +75,7 @@ const views: Array<{ key: View; label: string }> = [
   { key: "customerName", label: "Customer Name" },
   { key: "taskId", label: "Task ID" },
   { key: "status", label: "Status" },
+  { key: "dollarAmount", label: "Dollar Amount" },
 ];
 
 const initialPeriod: TaskPeriod = {
@@ -83,7 +85,7 @@ const initialPeriod: TaskPeriod = {
   today: "",
 };
 
-const columnLabels: Record<Exclude<View, "details">, string> = {
+const columnLabels: Record<Exclude<View, "details" | "dollarAmount">, string> = {
   taskType: "Task Type",
   taskSubtype: "Task Subtype",
   customer: "Customer",
@@ -736,7 +738,7 @@ export default function Dashboard() {
   }, [query, tasks]);
 
   const groupedRows = useMemo(() => {
-    if (view === "details" || view === "taskId") return [];
+    if (view === "details" || view === "taskId" || view === "dollarAmount") return [];
     const values = new Map<string, number>();
     for (const task of filteredTasks) {
       const value = task[view] || "Not set";
@@ -764,6 +766,19 @@ export default function Dashboard() {
         rows: filteredTasks.map((task) => [
           task.taskId || "Not set",
           formatValue(task.status),
+          task.charge.display,
+        ]),
+      };
+    }
+    if (view === "dollarAmount") {
+      return {
+        filename: exportName,
+        sheetName: "Dollar amounts",
+        columns: ["Task ID", "Customer", "Customer Name", "Dollar Amount"],
+        rows: filteredTasks.map((task) => [
+          task.taskId || "Not set",
+          task.customer || "Not set",
+          task.customerName || "Not set",
           task.charge.display,
         ]),
       };
@@ -1052,7 +1067,33 @@ export default function Dashboard() {
                     ))}</tbody>
                   </>
                 )}
-                {view !== "details" && view !== "taskId" && (
+                {view === "dollarAmount" && (
+                  <>
+                    <thead><tr><th>Task ID</th><th>Customer</th><th>Customer Name</th><th>Dollar Amount</th></tr></thead>
+                    <tbody>{filteredTasks.map((task, index) => (
+                      <tr
+                        key={`${task.taskId}-${index}`}
+                        className="task-data-row"
+                        onClick={(event) => openTaskFromRow(event, task)}
+                      >
+                        <td className="mono-cell strong-cell">
+                          <button
+                            type="button"
+                            className="task-row-button"
+                            aria-haspopup="dialog"
+                            aria-label={`Open task ${task.taskId || "details"}`}
+                          >
+                            {task.taskId || "Not set"}
+                          </button>
+                        </td>
+                        <td className="mono-cell">{task.customer || "Not set"}</td>
+                        <td>{task.customerName || "Not set"}</td>
+                        <td><TaskCharge task={task} /></td>
+                      </tr>
+                    ))}</tbody>
+                  </>
+                )}
+                {view !== "details" && view !== "taskId" && view !== "dollarAmount" && (
                   <>
                     <thead><tr><th>{columnLabels[view]}</th><th className="count-column">Task Count</th></tr></thead>
                     <tbody>{groupedRows.map(([value, count]) => (

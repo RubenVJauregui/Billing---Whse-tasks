@@ -87,6 +87,7 @@ try {
     "Customer Name",
     "Task ID",
     "Status",
+    "Dollar Amount",
   ]);
   assert.deepEqual(await page.locator("thead th").allTextContents(), [
     "Task Type",
@@ -142,6 +143,7 @@ try {
     ["Customer Name", ["Customer Name", "Task Count"]],
     ["Task ID", ["Task ID", "Status", "Task Charge"]],
     ["Status", ["Status", "Task Count"]],
+    ["Dollar Amount", ["Task ID", "Customer", "Customer Name", "Dollar Amount"]],
     ["Show All", ["Task Type", "Task Subtype", "Customer", "Customer Name", "Task ID", "Status", "Task Charge"]],
   ];
   for (const [index, [label, headers]] of viewChecks.entries()) {
@@ -154,6 +156,11 @@ try {
     if (label === "Show All") assert.equal(await page.getByLabel("Search tasks").inputValue(), "");
     const displayedRowCount = await page.locator(".table-wrap tbody tr").count();
     assert(displayedRowCount > 0);
+    if (label === "Dollar Amount") {
+      assert.equal(await page.locator(".table-wrap .task-charge").count(), displayedRowCount);
+      assert.equal(await page.locator(".table-wrap tbody tr td").first().innerText(), await page.locator(".table-wrap .task-row-button").first().innerText());
+      await page.screenshot({ path: "/tmp/wise-dollar-amount-view.png", fullPage: false });
+    }
     const rowButton = page.locator(".table-wrap tbody tr").first().locator(".task-row-button");
     await rowButton.focus();
     await page.keyboard.press(index % 2 === 0 ? "Space" : "Enter");
