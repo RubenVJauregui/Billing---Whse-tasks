@@ -95,6 +95,7 @@ try {
     "Customer Name",
     "Task ID",
     "Status",
+    "Task Charge",
   ]);
   const displayedTaskRows = page.locator(".table-wrap .task-data-row");
   assert.equal(await displayedTaskRows.count(), await page.locator(".table-wrap .task-charge").count());
@@ -129,6 +130,7 @@ try {
     "Customer Name",
     "Task ID",
     "Status",
+    "Task Charge",
   ]);
   assert.deepEqual(await page.locator(".summary-card").allTextContents(), cards);
   console.log("ok KPI card mouse and keyboard interactions");
@@ -138,9 +140,9 @@ try {
     ["Task Subtype", ["Task Subtype", "Task Count"]],
     ["Customer", ["Customer", "Task Count"]],
     ["Customer Name", ["Customer Name", "Task Count"]],
-    ["Task ID", ["Task ID", "Status"]],
+    ["Task ID", ["Task ID", "Status", "Task Charge"]],
     ["Status", ["Status", "Task Count"]],
-    ["Show All", ["Task Type", "Task Subtype", "Customer", "Customer Name", "Task ID", "Status"]],
+    ["Show All", ["Task Type", "Task Subtype", "Customer", "Customer Name", "Task ID", "Status", "Task Charge"]],
   ];
   for (const [index, [label, headers]] of viewChecks.entries()) {
     const control = page.locator(".view-tabs").getByRole("button", { name: label, exact: true });
@@ -165,12 +167,7 @@ try {
       page,
       page.getByRole("button", { name: "Export to Excel", exact: true }),
     );
-    const exportHeaders = label === "Show All"
-      ? [...headers, "Task Rate/Charge"]
-      : label === "Task ID"
-        ? [...headers, "Task Rate/Charge"]
-        : headers;
-    assert.deepEqual(exportedView.headers, exportHeaders);
+    assert.deepEqual(exportedView.headers, headers);
     assert.equal(exportedView.rowCount, displayedRowCount);
     await page.locator(".page-actions .export-feedback.success").filter({ hasText: "Excel export downloaded." }).waitFor();
   }
@@ -201,7 +198,8 @@ try {
     "Status",
   ]);
   assert.deepEqual(await taskDialog.locator("dd").allTextContents(), expectedTaskDetails);
-  assert.equal(await taskDialog.locator(".task-charge-detail strong").innerText(), expectedTaskCharge.replace(/^Task rate\/charge:?\s*/i, ""));
+  assert.equal(await taskDialog.locator(".task-charge-detail > span").textContent(), "Task Charge");
+  assert.equal(await taskDialog.locator(".task-charge-detail strong").innerText(), expectedTaskCharge);
   const closeTaskDialog = taskDialog.getByRole("button", { name: "Close", exact: true });
   assert(await closeTaskDialog.evaluate((element) => element === document.activeElement));
   const exportedTask = await exportWorkbook(
@@ -215,7 +213,7 @@ try {
     "Customer Name",
     "Task ID",
     "Status",
-    "Task Rate/Charge",
+    "Task Charge",
   ]);
   assert.equal(exportedTask.rowCount, 1);
   await page.screenshot({ path: "/tmp/wise-task-detail-dialog.png", fullPage: true });
@@ -255,6 +253,7 @@ try {
     "Customer Name",
     "Task ID",
     "Status",
+    "Task Charge",
   ]);
   assert.equal(await customerGroupDialog.locator("tbody tr").count(), customerGroupCount);
   assert((await customerGroupDialog.locator("tbody tr td:nth-child(4)").allTextContents()).every((name) => name === customerGroupName));
@@ -271,7 +270,7 @@ try {
     "Customer Name",
     "Task ID",
     "Status",
-    "Task Rate/Charge",
+    "Task Charge",
   ]);
   assert.equal(exportedCustomerGroup.rowCount, customerGroupCount);
   await page.screenshot({ path: "/tmp/wise-customer-name-group.png", fullPage: false });

@@ -99,7 +99,7 @@ const taskExportColumns = [
   "Customer Name",
   "Task ID",
   "Status",
-  "Task Rate/Charge",
+  "Task Charge",
 ];
 
 function taskExportRows(tasks: Task[]): ExcelCell[][] {
@@ -206,7 +206,6 @@ function statusClass(status: string) {
 function TaskCharge({ task }: { task: Task }) {
   return (
     <span className={`task-charge ${task.charge.available ? "available" : "unavailable"}`}>
-      <span className="task-charge-label">Task rate/charge</span>
       {task.charge.display}
     </span>
   );
@@ -519,7 +518,7 @@ function TaskDetailDialog({ task, onClose }: { task: Task; onClose: () => void }
           ))}
         </dl>
         <div className="task-charge-detail">
-          <span>Task rate/charge</span>
+          <span>Task Charge</span>
           <strong className={task.charge.available ? "available" : "unavailable"}>
             {task.charge.display}
           </strong>
@@ -582,7 +581,7 @@ function TaskGroupDialog({
         </header>
         <div className="customer-group-table">
           <table>
-            <thead><tr><th>Task Type</th><th>Task Subtype</th><th>Customer</th><th>Customer Name</th><th>Task ID</th><th>Status</th></tr></thead>
+            <thead><tr><th>Task Type</th><th>Task Subtype</th><th>Customer</th><th>Customer Name</th><th>Task ID</th><th>Status</th><th>Task Charge</th></tr></thead>
             <tbody>{group.tasks.map((task, index) => (
               <tr key={`${task.taskId}-${index}`}>
                 <td className="strong-cell">{formatValue(task.taskType)}</td>
@@ -590,7 +589,8 @@ function TaskGroupDialog({
                 <td className="mono-cell">{task.customer || "Not set"}</td>
                 <td>{task.customerName || "Not set"}</td>
                 <td className="mono-cell">{task.taskId || "Not set"}</td>
-                <td><div className="task-status-cell"><span className={statusClass(task.status)}>{formatValue(task.status)}</span><TaskCharge task={task} /></div></td>
+                <td><span className={statusClass(task.status)}>{formatValue(task.status)}</span></td>
+                <td><TaskCharge task={task} /></td>
               </tr>
             ))}</tbody>
           </table>
@@ -760,7 +760,7 @@ export default function Dashboard() {
       return {
         filename: exportName,
         sheetName: "Task IDs",
-        columns: ["Task ID", "Status", "Task Rate/Charge"],
+        columns: ["Task ID", "Status", "Task Charge"],
         rows: filteredTasks.map((task) => [
           task.taskId || "Not set",
           formatValue(task.status),
@@ -1013,7 +1013,7 @@ export default function Dashboard() {
               <table>
                 {view === "details" && (
                   <>
-                    <thead><tr><th>Task Type</th><th>Task Subtype</th><th>Customer</th><th>Customer Name</th><th>Task ID</th><th>Status</th></tr></thead>
+                    <thead><tr><th>Task Type</th><th>Task Subtype</th><th>Customer</th><th>Customer Name</th><th>Task ID</th><th>Status</th><th>Task Charge</th></tr></thead>
                     <tbody>{filteredTasks.map((task, index) => (
                       <tr
                         key={`${task.taskId}-${index}`}
@@ -1034,20 +1034,21 @@ export default function Dashboard() {
                         <td className="mono-cell">{task.customer}</td>
                         <td>{task.customerName}</td>
                         <td className="mono-cell">{task.taskId}</td>
-                        <td><div className="task-status-cell"><span className={statusClass(task.status)}>{formatValue(task.status)}</span><TaskCharge task={task} /></div></td>
+                        <td><span className={statusClass(task.status)}>{formatValue(task.status)}</span></td>
+                        <td><TaskCharge task={task} /></td>
                       </tr>
                     ))}</tbody>
                   </>
                 )}
                 {view === "taskId" && (
                   <>
-                    <thead><tr><th>Task ID</th><th>Status</th></tr></thead>
+                    <thead><tr><th>Task ID</th><th>Status</th><th>Task Charge</th></tr></thead>
                     <tbody>{filteredTasks.map((task, index) => (
                       <tr
                         key={`${task.taskId}-${index}`}
                         className="task-data-row"
                         onClick={(event) => openTaskFromRow(event, task)}
-                      ><td className="mono-cell strong-cell"><button type="button" className="task-row-button" aria-haspopup="dialog" aria-label={`Open task ${task.taskId || "details"}`}>{task.taskId}</button></td><td><div className="task-status-cell"><span className={statusClass(task.status)}>{formatValue(task.status)}</span><TaskCharge task={task} /></div></td></tr>
+                      ><td className="mono-cell strong-cell"><button type="button" className="task-row-button" aria-haspopup="dialog" aria-label={`Open task ${task.taskId || "details"}`}>{task.taskId}</button></td><td><span className={statusClass(task.status)}>{formatValue(task.status)}</span></td><td><TaskCharge task={task} /></td></tr>
                     ))}</tbody>
                   </>
                 )}
