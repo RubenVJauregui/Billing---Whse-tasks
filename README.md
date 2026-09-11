@@ -22,6 +22,8 @@ Production must provide `ITEMGPT_BASE_URL`, unless the deployment already provid
 
 Production must also provide `BNP_BASE_URL`, `BNP_USERNAME`, and `BNP_PASSWORD`. Keep the BNP credentials in deployment secrets and never expose them through `NEXT_PUBLIC_` variables. When BNP is not configured, unreachable, or cannot produce one fully confirmed active/effective price-list match, the dashboard shows `Rate not available at task level` and does not estimate a charge.
 
+The server authenticates BNP through `/PayAndBillAPI/api/v1/oauth/token`, then uses the returned BillPay user/client context for read-only price-list, price-detail, and billing-item requests. BNP credentials and sign tokens never reach browser code or task API responses.
+
 The app does not require IAM client credentials. Those secrets remain in the ItemGPT BFF. Do not configure development-only values such as `ITEM_AUTHORIZATION`, `ITEM_IAM_USER_ID`, or user credentials in Ibis.
 
 The tenant, facility, and timezone values are initial defaults only; authenticated facility data determines the selectable scope and each facility's timezone determines its local report date.

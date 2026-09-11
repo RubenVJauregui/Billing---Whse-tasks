@@ -26,7 +26,7 @@ type BnpSession = {
   expiresAt: number;
 };
 
-const LOGIN_PATH = "/ApiV2/api/User/login";
+const LOGIN_PATH = "/PayAndBillAPI/api/v1/oauth/token";
 const PRICE_LIST_PATH = "/ApiV2/api/billingpricelist/getListPage";
 const PRICE_DETAIL_PATH = "/ApiV2/api/billingpricelist/getPriceDetail";
 const BILLING_ITEMS_PATH = "/ApiV2/api/billingpricelist/GetPriceListBillingItemsAsync";
@@ -360,6 +360,7 @@ async function loadActivePriceLists(input: BnpTaskRateInput) {
   if (!session) return [];
   const pageSize = 100;
   const baseRequest = {
+    postParams: true,
     pageSize,
     isAll: false,
     ids: [],
