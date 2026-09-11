@@ -181,6 +181,10 @@ tbody tr:hover td { background: #f2f7fc; }
 .status-closed { color: #156b46; background: #def6e8; }
 .status-alert { color: #a62f3e; background: #fde5e8; }
 .status-neutral { color: #465367; background: #e9eef4; }
+.task-status-cell { display: flex; align-items: flex-start; flex-direction: column; gap: 5px; }
+.task-charge { display: block; max-width: 210px; color: var(--muted); font-size: 10px; line-height: 1.35; overflow-wrap: anywhere; }
+.task-charge.available { color: var(--green); font-weight: 700; }
+.task-charge-label::after { content: ": "; }
 .table-footer { min-height: 42px; display: flex; align-items: center; padding: 0 14px; border: 1px solid var(--border); border-top: 0; border-radius: 0 0 7px 7px; background: #f7fafc; color: var(--muted); font-size: 11px; }
 
 .state-panel { min-height: 260px; display: flex; align-items: center; justify-content: center; gap: 15px; padding: 30px; border: 1px solid var(--border); border-radius: 7px; background: #f9fbfd; color: var(--muted); text-align: left; }
@@ -222,6 +226,11 @@ tbody tr:hover td { background: #f2f7fc; }
 .task-detail-item dt { color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; }
 .task-detail-item dd { min-width: 0; margin: 0; overflow-wrap: anywhere; color: var(--foreground); font-size: 14px; font-weight: 600; }
 .task-detail-item dd.mono-cell { font-size: 12px; }
+.task-charge-detail { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 16px 22px 20px; border-top: 1px solid var(--border-soft); }
+.task-charge-detail > span { color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; }
+.task-charge-detail strong { overflow-wrap: anywhere; font-size: 14px; text-align: right; }
+.task-charge-detail strong.available { color: var(--green); }
+.task-charge-detail strong.unavailable { color: var(--muted-strong); font-weight: 600; }
 .customer-group-table { min-height: 0; margin: 0 22px 22px; overflow: auto; border: 1px solid var(--border); border-radius: 7px; }
 .customer-group-table table { min-width: 900px; }
 

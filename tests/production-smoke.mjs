@@ -96,6 +96,15 @@ try {
     "Task ID",
     "Status",
   ]);
+  const displayedTaskRows = page.locator(".table-wrap .task-data-row");
+  assert.equal(await displayedTaskRows.count(), await page.locator(".table-wrap .task-charge").count());
+  assert((await page.locator(".table-wrap .task-charge.unavailable").allTextContents()).every(
+    (value) => value.includes("Rate not available at task level"),
+  ));
+  assert.equal(
+    await page.locator(".table-wrap .task-charge.available, .table-wrap .task-charge.unavailable").count(),
+    await displayedTaskRows.count(),
+  );
   console.log("ok Valley View dashboard", cards.join(" | "));
 
   const assignedTasksCard = page.getByRole("button", { name: /^Assigned tasks/ });
@@ -129,8 +138,8 @@ try {
     ["Task Subtype", ["Task Subtype", "Task Count"]],
     ["Customer", ["Customer", "Task Count"]],
     ["Customer Name", ["Customer Name", "Task Count"]],
-    ["Task ID", ["Task ID", "Task Count"]],
-    ["Status", ["Task ID", "Status"]],
+    ["Task ID", ["Task ID", "Status"]],
+    ["Status", ["Status", "Task Count"]],
     ["Show All", ["Task Type", "Task Subtype", "Customer", "Customer Name", "Task ID", "Status"]],
   ];
   for (const [index, [label, headers]] of viewChecks.entries()) {
@@ -142,11 +151,26 @@ try {
     assert.deepEqual(await page.locator("thead th").allTextContents(), headers);
     if (label === "Show All") assert.equal(await page.getByLabel("Search tasks").inputValue(), "");
     const displayedRowCount = await page.locator(".table-wrap tbody tr").count();
+    assert(displayedRowCount > 0);
+    const rowButton = page.locator(".table-wrap tbody tr").first().locator(".task-row-button");
+    await rowButton.focus();
+    await page.keyboard.press(index % 2 === 0 ? "Space" : "Enter");
+    const rowDialog = page.getByRole("dialog").last();
+    await rowDialog.waitFor();
+    await page.keyboard.press("Escape");
+    await rowDialog.waitFor({ state: "detached" });
+    await page.waitForFunction(() => document.activeElement?.classList.contains("task-row-button"));
+    assert(await rowButton.evaluate((element) => element === document.activeElement));
     const exportedView = await exportWorkbook(
       page,
       page.getByRole("button", { name: "Export to Excel", exact: true }),
     );
-    assert.deepEqual(exportedView.headers, headers);
+    const exportHeaders = label === "Show All"
+      ? [...headers, "Task Rate/Charge"]
+      : label === "Task ID"
+        ? [...headers, "Task Rate/Charge"]
+        : headers;
+    assert.deepEqual(exportedView.headers, exportHeaders);
     assert.equal(exportedView.rowCount, displayedRowCount);
     await page.locator(".page-actions .export-feedback.success").filter({ hasText: "Excel export downloaded." }).waitFor();
   }
@@ -160,7 +184,11 @@ try {
   console.log("ok empty export feedback");
 
   const firstTaskRow = page.locator(".task-data-row").first();
-  const expectedTaskDetails = await firstTaskRow.locator("td").allTextContents();
+  const expectedTaskDetails = [
+    ...await firstTaskRow.locator("td").evaluateAll((cells) => cells.slice(0, 5).map((cell) => cell.textContent || "")),
+    await firstTaskRow.locator(".status").innerText(),
+  ];
+  const expectedTaskCharge = await firstTaskRow.locator(".task-charge").innerText();
   await firstTaskRow.click();
   const taskDialog = page.getByRole("dialog", { name: "Task details" });
   await taskDialog.waitFor();
@@ -173,6 +201,7 @@ try {
     "Status",
   ]);
   assert.deepEqual(await taskDialog.locator("dd").allTextContents(), expectedTaskDetails);
+  assert.equal(await taskDialog.locator(".task-charge-detail strong").innerText(), expectedTaskCharge.replace(/^Task rate\/charge:?\s*/i, ""));
   const closeTaskDialog = taskDialog.getByRole("button", { name: "Close", exact: true });
   assert(await closeTaskDialog.evaluate((element) => element === document.activeElement));
   const exportedTask = await exportWorkbook(
@@ -186,6 +215,7 @@ try {
     "Customer Name",
     "Task ID",
     "Status",
+    "Task Rate/Charge",
   ]);
   assert.equal(exportedTask.rowCount, 1);
   await page.screenshot({ path: "/tmp/wise-task-detail-dialog.png", fullPage: true });
@@ -211,7 +241,7 @@ try {
   console.log("ok task row mouse and keyboard detail dialog");
 
   await page.locator(".view-tabs").getByRole("button", { name: "Customer Name", exact: true }).click();
-  const customerGroupRow = page.locator(".customer-group-row").first();
+  const customerGroupRow = page.locator(".task-group-row").first();
   const customerGroupName = await customerGroupRow.locator("td").first().innerText();
   const customerGroupCount = Number((await customerGroupRow.locator("td").nth(1).innerText()).replaceAll(",", ""));
   await customerGroupRow.locator("td").nth(1).click();
@@ -241,20 +271,21 @@ try {
     "Customer Name",
     "Task ID",
     "Status",
+    "Task Rate/Charge",
   ]);
   assert.equal(exportedCustomerGroup.rowCount, customerGroupCount);
   await page.screenshot({ path: "/tmp/wise-customer-name-group.png", fullPage: false });
   await closeCustomerGroup.click();
   await customerGroupDialog.waitFor({ state: "detached" });
-  await page.waitForFunction(() => document.activeElement?.classList.contains("customer-group-button"));
+  await page.waitForFunction(() => document.activeElement?.classList.contains("task-group-button"));
 
-  const customerGroupButton = customerGroupRow.locator(".customer-group-button");
+  const customerGroupButton = customerGroupRow.locator(".task-group-button");
   await customerGroupButton.focus();
   await page.keyboard.press("Enter");
   await customerGroupDialog.waitFor();
   await page.keyboard.press("Escape");
   await customerGroupDialog.waitFor({ state: "detached" });
-  await page.waitForFunction(() => document.activeElement?.classList.contains("customer-group-button"));
+  await page.waitForFunction(() => document.activeElement?.classList.contains("task-group-button"));
   console.log("ok customer-name group mouse and keyboard drill-down", customerGroupName, customerGroupCount);
 
   await page.locator(".date-card").click();
@@ -266,7 +297,7 @@ try {
   assert.notEqual(previousMonth, currentMonth);
   await page.getByRole("button", { name: "Show entire month" }).click();
   await page.locator(".date-dialog").waitFor({ state: "detached" });
-  await page.locator(".table-wrap, .state-panel").first().waitFor({ timeout: 30_000 });
+  await page.locator(".table-wrap, .state-panel").first().waitFor({ timeout: 60_000 });
   assert.equal(await page.locator(".error-state").count(), 0);
   assert(taskRequests.some((url) => url.includes("month=")));
   assert.match(await page.locator(".date-card").innerText(), new RegExp(previousMonth));

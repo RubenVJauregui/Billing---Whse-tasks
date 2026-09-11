@@ -1,4 +1,5 @@
 import { AuthError, getSession, type AuthSession } from "@/lib/session";
+import { lookupBnpTaskRate, type BnpTaskRateInput } from "@/lib/bnp";
 
 export type Facility = {
   id: string;
@@ -14,6 +15,12 @@ export type TaskRow = {
   customerName: string;
   taskId: string;
   status: string;
+  charge: TaskCharge;
+};
+
+export type TaskCharge = {
+  available: boolean;
+  display: string;
 };
 
 export type TaskPeriod = {
@@ -42,8 +49,25 @@ type RawFacility = {
 type RawTask = Record<string, unknown>;
 type TaskSearchData = Record<string, unknown>;
 
+type GeneralTaskLine = {
+  jobPrice?: unknown;
+  jobQty?: unknown;
+  jobUom?: unknown;
+  jobCurrency?: unknown;
+};
+
+type GeneralTaskDetail = {
+  totalBillableAmount?: unknown;
+  generalTaskLines?: GeneralTaskLine[];
+};
+
 const FALLBACK_FACILITY_ID = "LT_F1";
 const FALLBACK_TIME_ZONE = "America/Los_Angeles";
+const RATE_NOT_AVAILABLE = "Rate not available at task level";
+const unavailableCharge: TaskCharge = {
+  available: false,
+  display: RATE_NOT_AVAILABLE,
+};
 
 export class WmsError extends Error {
   constructor(
@@ -264,6 +288,148 @@ function taskTypeFromCollection(collection: string) {
   return collection.endsWith("Tasks") ? collection.slice(0, -5) : collection;
 }
 
+function numericValue(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function recordValue(source: RawTask, names: string[]) {
+  const wanted = new Set(names.map((name) => name.toLowerCase()));
+  return Object.entries(source).find(([key]) => wanted.has(key.toLowerCase()))?.[1];
+}
+
+function pricingSources(task: RawTask) {
+  const sources = [task];
+  for (const name of ["taskSteps", "lines", "details", "histories", "putBackTaskHistories"]) {
+    const value = task[name];
+    if (!Array.isArray(value)) continue;
+    for (const candidate of value) {
+      if (candidate && typeof candidate === "object" && !Array.isArray(candidate)) {
+        sources.push(candidate as RawTask);
+      }
+    }
+  }
+  return sources;
+}
+
+function uniqueText(sources: RawTask[], names: string[]) {
+  const candidates = sources.flatMap((source) => {
+    const value = recordValue(source, names);
+    return Array.isArray(value) ? value : [value];
+  }).filter((value) => value !== null && value !== undefined && value !== "")
+    .map((value) => String(value).trim())
+    .filter(Boolean);
+  const unique = [...new Set(candidates.map((value) => value.toLowerCase()))];
+  return unique.length === 1
+    ? candidates.find((value) => value.toLowerCase() === unique[0]) ?? null
+    : null;
+}
+
+function uniqueNumber(sources: RawTask[], names: string[]) {
+  const candidates = sources.flatMap((source) => {
+    const value = recordValue(source, names);
+    return Array.isArray(value) ? value : [value];
+  }).map(numericValue).filter((value): value is number => value !== null);
+  const unique = [...new Set(candidates)];
+  return unique.length === 1 ? unique[0] : null;
+}
+
+function conditionContext(sources: RawTask[]) {
+  const values = new Map<string, Set<string>>();
+  for (const source of sources) {
+    for (const [key, value] of Object.entries(source)) {
+      if (!["string", "number", "boolean"].includes(typeof value)) continue;
+      const normalizedKey = key.trim().toLowerCase();
+      const bucket = values.get(normalizedKey) ?? new Set<string>();
+      bucket.add(String(value).trim());
+      values.set(normalizedKey, bucket);
+    }
+  }
+  return Object.fromEntries(
+    [...values.entries()]
+      .filter(([, entries]) => entries.size === 1)
+      .map(([key, entries]) => [key, [...entries][0]]),
+  );
+}
+
+function bnpRateInput(task: RawTask): BnpTaskRateInput | null {
+  const sources = pricingSources(task);
+  const customers = customerIds(task);
+  const customerCode = customers.length === 1 ? customers[0] : null;
+  const billTo = uniqueText(sources, [
+    "billTo", "billToCode", "billToID", "billToId", "billtoID", "billingCustomerId",
+  ]);
+  const serviceCode = uniqueText(sources, [
+    "billingCode", "billingItemCode", "serviceCode", "jobCode", "accountItemCode", "chargeCode",
+  ]);
+  const quantity = uniqueNumber(sources, ["quantity", "qty", "jobQty"]);
+  const uom = uniqueText(sources, ["uom", "uomCode", "uomID", "uomId", "jobUom"]);
+  const location = uniqueText(sources, [
+    "location", "locationCode", "locationID", "locationId", "site", "siteCode", "warehouseID", "warehouseId",
+  ]);
+  const occurredAt = String(task.createdTime ?? "").trim();
+  if (!customerCode || !billTo || !serviceCode || quantity === null || !uom || !location || !Number.isFinite(Date.parse(occurredAt))) {
+    return null;
+  }
+  return {
+    customerCode,
+    billTo,
+    serviceCode,
+    quantity,
+    uom,
+    location,
+    occurredAt,
+    conditions: conditionContext(sources),
+  };
+}
+
+function bnpTaskCharge(rate: Awaited<ReturnType<typeof lookupBnpTaskRate>>): TaskCharge {
+  if (!rate) return unavailableCharge;
+  try {
+    const amount = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: rate.currency,
+      currencyDisplay: "code",
+    }).format(rate.amount);
+    return { available: true, display: `${amount} per ${rate.uom}` };
+  } catch {
+    return unavailableCharge;
+  }
+}
+
+function generalTaskCharge(detail: GeneralTaskDetail): TaskCharge {
+  const total = numericValue(detail.totalBillableAmount);
+  const lines = Array.isArray(detail.generalTaskLines) ? detail.generalTaskLines : [];
+  if (total === null || lines.length === 0) return unavailableCharge;
+
+  const completeLines = lines.filter((line) =>
+    numericValue(line.jobPrice) !== null &&
+    numericValue(line.jobQty) !== null &&
+    String(line.jobUom ?? "").trim() &&
+    String(line.jobCurrency ?? "").trim(),
+  );
+  if (completeLines.length !== lines.length) return unavailableCharge;
+
+  const currencies = [...new Set(
+    completeLines.map((line) => String(line.jobCurrency).trim().toUpperCase()),
+  )];
+  if (currencies.length !== 1 || !/^[A-Z]{3}$/.test(currencies[0])) return unavailableCharge;
+
+  try {
+    return {
+      available: true,
+      display: new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: currencies[0],
+        currencyDisplay: "code",
+      }).format(total),
+    };
+  } catch {
+    return unavailableCharge;
+  }
+}
+
 async function mapWithConcurrency<T, U>(
   values: T[],
   limit: number,
@@ -308,6 +474,53 @@ async function loadCustomerNames(
   return new Map(entries);
 }
 
+async function loadGeneralTaskCharges(
+  rows: Array<{ type: string; task: RawTask }>,
+  session: AuthSession,
+  facility: Facility,
+) {
+  const generalTasks = rows.filter(({ type, task }) =>
+    type.toUpperCase() === "GENERAL" && task.id,
+  );
+  const entries = await mapWithConcurrency(generalTasks, 6, async ({ task }) => {
+    const taskId = String(task.id);
+    try {
+      const detail = await requestWithSession<GeneralTaskDetail>(
+        `/wms-bam/task/general-task/get/${encodeURIComponent(taskId)}`,
+        {
+          session,
+          method: "GET",
+          facilityId: facility.id,
+          timeZone: facility.timeZone,
+        },
+      );
+      return [task, generalTaskCharge(detail)] as const;
+    } catch (error) {
+      if (error instanceof AuthError) throw error;
+      return [task, unavailableCharge] as const;
+    }
+  });
+  return new Map(entries);
+}
+
+async function loadBnpTaskCharges(
+  rows: Array<{ type: string; task: RawTask }>,
+  authoritativeCharges: Map<RawTask, TaskCharge>,
+) {
+  const candidates = rows.flatMap(({ task }) => {
+    if (authoritativeCharges.get(task)?.available) return [];
+    const input = bnpRateInput(task);
+    return input ? [{ task, input }] : [];
+  });
+  const uniqueInputs = new Map<string, BnpTaskRateInput>();
+  for (const { input } of candidates) uniqueInputs.set(JSON.stringify(input), input);
+  const rates = await mapWithConcurrency([...uniqueInputs.entries()], 4, async ([key, input]) =>
+    [key, bnpTaskCharge(await lookupBnpTaskRate(input))] as const,
+  );
+  const byInput = new Map(rates);
+  return new Map(candidates.map(({ task, input }) => [task, byInput.get(JSON.stringify(input)) ?? unavailableCharge]));
+}
+
 export async function loadAssignedTasks(
   session: AuthSession,
   facility: Facility,
@@ -345,17 +558,27 @@ export async function loadAssignedTasks(
   }
 
   const uniqueCustomerIds = [...new Set(rawRows.flatMap((row) => row.customers))];
-  const names = await loadCustomerNames(uniqueCustomerIds, session, facility);
-  const tasks: TaskRow[] = rawRows.map(({ type, task, customers }) => ({
-    taskType: type,
-    taskSubtype: taskSubtype(task),
-    customer: customers.join("; ") || "Unassigned customer",
-    customerName:
-      customers.map((id) => names.get(id) || "Name unavailable").join("; ") ||
-      "Unassigned customer",
-    taskId: String(task.id ?? ""),
-    status: String(task.status ?? ""),
-  }));
+  const [names, generalTaskCharges] = await Promise.all([
+    loadCustomerNames(uniqueCustomerIds, session, facility),
+    loadGeneralTaskCharges(rawRows, session, facility),
+  ]);
+  const bnpTaskCharges = await loadBnpTaskCharges(rawRows, generalTaskCharges);
+  const tasks: TaskRow[] = rawRows.map(({ type, task, customers }) => {
+    const authoritativeCharge = generalTaskCharges.get(task);
+    return {
+      taskType: type,
+      taskSubtype: taskSubtype(task),
+      customer: customers.join("; ") || "Unassigned customer",
+      customerName:
+        customers.map((id) => names.get(id) || "Name unavailable").join("; ") ||
+        "Unassigned customer",
+      taskId: String(task.id ?? ""),
+      status: String(task.status ?? ""),
+      charge: authoritativeCharge?.available
+        ? authoritativeCharge
+        : bnpTaskCharges.get(task) ?? unavailableCharge,
+    };
+  });
 
   tasks.sort((left, right) =>
     left.taskType.localeCompare(right.taskType) ||

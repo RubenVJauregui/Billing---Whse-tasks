@@ -25,6 +25,10 @@ type Task = {
   customerName: string;
   taskId: string;
   status: string;
+  charge: {
+    available: boolean;
+    display: string;
+  };
 };
 
 type TaskPeriod = {
@@ -95,6 +99,7 @@ const taskExportColumns = [
   "Customer Name",
   "Task ID",
   "Status",
+  "Task Rate/Charge",
 ];
 
 function taskExportRows(tasks: Task[]): ExcelCell[][] {
@@ -105,6 +110,7 @@ function taskExportRows(tasks: Task[]): ExcelCell[][] {
     task.customerName || "Not set",
     task.taskId || "Not set",
     formatValue(task.status),
+    task.charge.display,
   ]);
 }
 
@@ -195,6 +201,15 @@ function statusClass(status: string) {
   if (normalized.includes("CLOSED") || normalized === "COMPLETED") return "status status-closed";
   if (normalized.includes("CANCEL") || normalized === "EXCEPTION") return "status status-alert";
   return "status status-neutral";
+}
+
+function TaskCharge({ task }: { task: Task }) {
+  return (
+    <span className={`task-charge ${task.charge.available ? "available" : "unavailable"}`}>
+      <span className="task-charge-label">Task rate/charge</span>
+      {task.charge.display}
+    </span>
+  );
 }
 
 async function readJson<T>(response: Response): Promise<T> {
@@ -503,6 +518,12 @@ function TaskDetailDialog({ task, onClose }: { task: Task; onClose: () => void }
             </div>
           ))}
         </dl>
+        <div className="task-charge-detail">
+          <span>Task rate/charge</span>
+          <strong className={task.charge.available ? "available" : "unavailable"}>
+            {task.charge.display}
+          </strong>
+        </div>
       </section>
     </div>
   );
@@ -569,7 +590,7 @@ function TaskGroupDialog({
                 <td className="mono-cell">{task.customer || "Not set"}</td>
                 <td>{task.customerName || "Not set"}</td>
                 <td className="mono-cell">{task.taskId || "Not set"}</td>
-                <td><span className={statusClass(task.status)}>{formatValue(task.status)}</span></td>
+                <td><div className="task-status-cell"><span className={statusClass(task.status)}>{formatValue(task.status)}</span><TaskCharge task={task} /></div></td>
               </tr>
             ))}</tbody>
           </table>
@@ -704,7 +725,14 @@ export default function Dashboard() {
   const filteredTasks = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return tasks;
-    return tasks.filter((task) => Object.values(task).some((value) => value.toLowerCase().includes(normalized)));
+    return tasks.filter((task) => [
+      task.taskType,
+      task.taskSubtype,
+      task.customer,
+      task.customerName,
+      task.taskId,
+      task.status,
+    ].some((value) => value.toLowerCase().includes(normalized)));
   }, [query, tasks]);
 
   const groupedRows = useMemo(() => {
@@ -732,8 +760,12 @@ export default function Dashboard() {
       return {
         filename: exportName,
         sheetName: "Task IDs",
-        columns: ["Task ID", "Status"],
-        rows: filteredTasks.map((task) => [task.taskId || "Not set", formatValue(task.status)]),
+        columns: ["Task ID", "Status", "Task Rate/Charge"],
+        rows: filteredTasks.map((task) => [
+          task.taskId || "Not set",
+          formatValue(task.status),
+          task.charge.display,
+        ]),
       };
     }
     return {
@@ -1002,7 +1034,7 @@ export default function Dashboard() {
                         <td className="mono-cell">{task.customer}</td>
                         <td>{task.customerName}</td>
                         <td className="mono-cell">{task.taskId}</td>
-                        <td><span className={statusClass(task.status)}>{formatValue(task.status)}</span></td>
+                        <td><div className="task-status-cell"><span className={statusClass(task.status)}>{formatValue(task.status)}</span><TaskCharge task={task} /></div></td>
                       </tr>
                     ))}</tbody>
                   </>
@@ -1015,7 +1047,7 @@ export default function Dashboard() {
                         key={`${task.taskId}-${index}`}
                         className="task-data-row"
                         onClick={(event) => openTaskFromRow(event, task)}
-                      ><td className="mono-cell strong-cell"><button type="button" className="task-row-button" aria-haspopup="dialog" aria-label={`Open task ${task.taskId || "details"}`}>{task.taskId}</button></td><td><span className={statusClass(task.status)}>{formatValue(task.status)}</span></td></tr>
+                      ><td className="mono-cell strong-cell"><button type="button" className="task-row-button" aria-haspopup="dialog" aria-label={`Open task ${task.taskId || "details"}`}>{task.taskId}</button></td><td><div className="task-status-cell"><span className={statusClass(task.status)}>{formatValue(task.status)}</span><TaskCharge task={task} /></div></td></tr>
                     ))}</tbody>
                   </>
                 )}
