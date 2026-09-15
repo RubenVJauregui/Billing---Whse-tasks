@@ -104,6 +104,37 @@ const taskExportColumns = [
   "Task Charge",
 ];
 
+const GURUNANDA_CUSTOMER_ID = "ORG-655875";
+const GURUNANDA_RATE_BY_TASK = new Map<string, number>([
+  ["LOAD|LIVE LOAD", 7.5],
+  ["LOAD|PRE LOAD", 7.5],
+  ["PICK|CASE PICK", 0.3],
+  ["PICK|PALLET PICK", 5.5],
+  ["PUT AWAY|PUT AWAY BY LP", 4.25],
+  ["RECEIVE|NOT SET", 5.5],
+]);
+
+function taskRateKey(taskType: string, subtype: string) {
+  return `${taskType.trim().toUpperCase()}|${(subtype.trim() || "Not set").toUpperCase()}`;
+}
+
+function dollarRate(amount: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(amount);
+}
+
+function taskCharge(task: Task) {
+  if (task.charge.available) return task.charge;
+  const isGurunanda =
+    task.customer.split(";").map((value) => value.trim()).includes(GURUNANDA_CUSTOMER_ID) ||
+    task.customerName.toUpperCase().split(";").map((value) => value.trim()).includes("GURUNANDA, LLC");
+  if (!isGurunanda) return task.charge;
+  const rate = GURUNANDA_RATE_BY_TASK.get(taskRateKey(task.taskType, task.taskSubtype));
+  return rate === undefined ? task.charge : { available: true, display: dollarRate(rate) };
+}
+
 function taskExportRows(tasks: Task[]): ExcelCell[][] {
   return tasks.map((task) => [
     formatValue(task.taskType),
@@ -112,7 +143,7 @@ function taskExportRows(tasks: Task[]): ExcelCell[][] {
     task.customerName || "Not set",
     task.taskId || "Not set",
     formatValue(task.status),
-    task.charge.display,
+    taskCharge(task).display,
   ]);
 }
 
@@ -206,9 +237,10 @@ function statusClass(status: string) {
 }
 
 function TaskCharge({ task }: { task: Task }) {
+  const charge = taskCharge(task);
   return (
-    <span className={`task-charge ${task.charge.available ? "available" : "unavailable"}`}>
-      {task.charge.display}
+    <span className={`task-charge ${charge.available ? "available" : "unavailable"}`}>
+      {charge.display}
     </span>
   );
 }
@@ -460,6 +492,7 @@ function DatePicker({
 
 function TaskDetailDialog({ task, onClose }: { task: Task; onClose: () => void }) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  const charge = taskCharge(task);
   const details = [
     ["Task Type", formatValue(task.taskType)],
     ["Task Subtype", formatValue(task.taskSubtype)],
@@ -521,8 +554,8 @@ function TaskDetailDialog({ task, onClose }: { task: Task; onClose: () => void }
         </dl>
         <div className="task-charge-detail">
           <span>Task Charge</span>
-          <strong className={task.charge.available ? "available" : "unavailable"}>
-            {task.charge.display}
+          <strong className={charge.available ? "available" : "unavailable"}>
+            {charge.display}
           </strong>
         </div>
       </section>
@@ -766,7 +799,7 @@ export default function Dashboard() {
         rows: filteredTasks.map((task) => [
           task.taskId || "Not set",
           formatValue(task.status),
-          task.charge.display,
+          taskCharge(task).display,
         ]),
       };
     }
@@ -779,7 +812,7 @@ export default function Dashboard() {
           task.taskId || "Not set",
           task.customer || "Not set",
           task.customerName || "Not set",
-          task.charge.display,
+          taskCharge(task).display,
         ]),
       };
     }
