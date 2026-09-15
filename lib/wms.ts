@@ -68,6 +68,15 @@ const unavailableCharge: TaskCharge = {
   available: false,
   display: RATE_NOT_AVAILABLE,
 };
+const GURUNANDA_CUSTOMER_ID = "ORG-655875";
+const GURUNANDA_RATE_BY_TASK = new Map<string, number>([
+  ["LOAD|LIVE LOAD", 7.5],
+  ["LOAD|PRE LOAD", 7.5],
+  ["PICK|CASE PICK", 0.3],
+  ["PICK|PALLET PICK", 5.5],
+  ["PUT AWAY|PUT AWAY BY LP", 4.25],
+  ["RECEIVE|NOT SET", 5.5],
+]);
 
 export class WmsError extends Error {
   constructor(
@@ -398,6 +407,26 @@ function bnpTaskCharge(rate: Awaited<ReturnType<typeof lookupBnpTaskRate>>): Tas
   }
 }
 
+function taskRateKey(taskType: string, subtype: string) {
+  return `${taskType.trim().toUpperCase()}|${(subtype.trim() || "Not set").toUpperCase()}`;
+}
+
+function dollarCharge(amount: number): TaskCharge {
+  return {
+    available: true,
+    display: new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+    }).format(amount),
+  };
+}
+
+function gurunandaTaskCharge(taskType: string, subtype: string, customers: string[]) {
+  if (!customers.includes(GURUNANDA_CUSTOMER_ID)) return null;
+  const rate = GURUNANDA_RATE_BY_TASK.get(taskRateKey(taskType, subtype));
+  return rate === undefined ? null : dollarCharge(rate);
+}
+
 function generalTaskCharge(detail: GeneralTaskDetail): TaskCharge {
   const total = numericValue(detail.totalBillableAmount);
   const lines = Array.isArray(detail.generalTaskLines) ? detail.generalTaskLines : [];
@@ -565,9 +594,11 @@ export async function loadAssignedTasks(
   const bnpTaskCharges = await loadBnpTaskCharges(rawRows, generalTaskCharges);
   const tasks: TaskRow[] = rawRows.map(({ type, task, customers }) => {
     const authoritativeCharge = generalTaskCharges.get(task);
+    const bnpCharge = bnpTaskCharges.get(task);
+    const subtype = taskSubtype(task);
     return {
       taskType: type,
-      taskSubtype: taskSubtype(task),
+      taskSubtype: subtype,
       customer: customers.join("; ") || "Unassigned customer",
       customerName:
         customers.map((id) => names.get(id) || "Name unavailable").join("; ") ||
@@ -576,7 +607,9 @@ export async function loadAssignedTasks(
       status: String(task.status ?? ""),
       charge: authoritativeCharge?.available
         ? authoritativeCharge
-        : bnpTaskCharges.get(task) ?? unavailableCharge,
+        : bnpCharge?.available
+          ? bnpCharge
+          : gurunandaTaskCharge(type, subtype, customers) ?? unavailableCharge,
     };
   });
 
